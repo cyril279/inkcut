@@ -18,6 +18,22 @@ RUN apk add --no-cache \
 # --break-system-packages is required for Alpine 3.19+
 RUN pip3 install --no-cache-dir --break-system-packages inkcut
 
+# Generate the .desktop file
+RUN mkdir -p /output/usr/share/applications && \
+    cat > /output/usr/share/applications/inkcut.desktop <<'EOL'
+[Desktop Entry]
+Name=Inkcut
+GenericName=Terminal entering Inkcut
+Comment=Terminal entering Inkcut
+Categories=Distrobox;System;Utility
+Exec=inkcut
+Icon=/usr/share/icons/inkcut.svg
+Keywords=distrobox;
+NoDisplay=false
+Terminal=false
+Type=Application
+EOL
+
 # ---------- Stage 2: Runtime ----------
 FROM alpine:3.24
 
@@ -42,9 +58,12 @@ COPY --from=builder /usr/lib/python3.14/site-packages /usr/lib/python3.14/site-p
 
 # Copy executable scripts (inkcut)
 COPY --from=builder /usr/bin/inkcut /usr/bin/inkcut
+COPY --from=builder /output/usr/share/applications/inkcut.desktop /usr/share/applications/inkcut.desktop
+
+RUN cp /usr/lib/python3.*/site-packages/inkcut/res/media/inkcut.svg /usr/share/icons/inkcut.svg
 
 # Ensure the script is executable
-RUN chmod +x /usr/bin/inkcut
+#RUN chmod +x /usr/bin/inkcut
 
 ENV PATH="/usr/bin:$PATH"
 
