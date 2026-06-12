@@ -1,5 +1,5 @@
 # ---------- Stage 1: Builder ----------
-FROM alpine:3.24 AS builder
+FROM alpine:3 AS builder
 
 # Install runtime + build dependencies
 RUN apk add --no-cache \
@@ -14,10 +14,9 @@ RUN apk add --no-cache \
     build-base \
     cups-dev
 
+# Create & activate virtual env, and install inkcut there-into
 RUN python3 -m venv --system-site-packages /opt/inkcut-env
-
 ENV PATH="/opt/inkcut-env/bin:$PATH"
-
 RUN pip install --no-cache-dir inkcut
 
 # Generate the .desktop file
@@ -37,7 +36,7 @@ Type=Application
 EOL
 
 # ---------- Stage 2: Runtime ----------
-FROM alpine:3.24
+FROM alpine:3
 
 # Install runtime dependencies
 RUN apk add --no-cache \
@@ -53,21 +52,15 @@ RUN apk add --no-cache \
     qt6-qtserialport \
     qt6-qtwayland
 
+# Copy (& reference) the virtual environment from the builder stage
 COPY --from=builder /opt/inkcut-env /opt/inkcut-env
-
 ENV PATH="/opt/inkcut-env/bin:$PATH"
+
 #ENV QT_QPA_PLATFORM=xcb
 
-WORKDIR /app
-
-RUN ln -sf /opt/inkcut-env/bin/inkcut /usr/bin/inkcut
+# Gather desktop-launcher components
 COPY --from=builder /output/usr/share/applications/inkcut.desktop /usr/share/applications/inkcut.desktop
-
 RUN cp /opt/inkcut-env/lib/python*/site-packages/inkcut/res/media/inkcut.svg /usr/share/icons/inkcut.svg 2>/dev/null || true
 
-# Ensure the script is executable
-#RUN chmod +x /usr/bin/inkcut
-
-ENV PATH="/usr/bin:$PATH"
-
+# Set the entrypoint
 CMD ["inkcut"]
