@@ -2,21 +2,23 @@
 FROM alpine:3.24 AS builder
 
 # Install runtime + build dependencies
-# py3-lxml satisfies the lxml requirement, so pip won't try to compile it.
-# qt5-qtbase-dev is still needed if enaml requires compilation against Qt headers.
 RUN apk add --no-cache \
     python3 \
+    py3-lxml \
     py3-pip \
     py3-pycups \
-    py3-lxml \
+    py3-packaging \
     py3-qt6 \
     qt6-qtbase-dev \
+    qt6-qtwayland-dev \
     build-base \
     cups-dev
 
-# Install Inkcut from PyPI
-# --break-system-packages is required for Alpine 3.19+
-RUN pip3 install --no-cache-dir --break-system-packages inkcut
+RUN python3 -m venv --system-site-packages /opt/inkcut-env
+
+ENV PATH="/opt/inkcut-env/bin:$PATH"
+
+RUN pip install --no-cache-dir inkcut
 
 # Generate the .desktop file
 RUN mkdir -p /output/usr/share/applications && \
@@ -38,29 +40,30 @@ EOL
 FROM alpine:3.24
 
 # Install runtime dependencies
-# Include py3-lxml here too, as it was used in builder
 RUN apk add --no-cache \
     python3 \
-    py3-pycups \
-    py3-qt6 \
     py3-lxml \
+    py3-pycups \
+    py3-packaging \
+    py3-qt6 \
     cups-libs \
     qt6-qtbase \
     qt6-qtsvg \
     qt6-qtdeclarative \
-    qt6-qtserialport
+    qt6-qtserialport \
+    qt6-qtwayland
+
+COPY --from=builder /opt/inkcut-env /opt/inkcut-env
+
+ENV PATH="/opt/inkcut-env/bin:$PATH"
+#ENV QT_QPA_PLATFORM=xcb
 
 WORKDIR /app
 
-# Copy Python site-packages from builder
-# Includes inkcut, enaml, pyqtgraph, and any pure-python deps
-COPY --from=builder /usr/lib/python3.14/site-packages /usr/lib/python3.14/site-packages
-
-# Copy executable scripts (inkcut)
-COPY --from=builder /usr/bin/inkcut /usr/bin/inkcut
+RUN ln -sf /opt/inkcut-env/bin/inkcut /usr/bin/inkcut
 COPY --from=builder /output/usr/share/applications/inkcut.desktop /usr/share/applications/inkcut.desktop
 
-RUN cp /usr/lib/python3.*/site-packages/inkcut/res/media/inkcut.svg /usr/share/icons/inkcut.svg
+RUN cp /opt/inkcut-env/lib/python*/site-packages/inkcut/res/media/inkcut.svg /usr/share/icons/inkcut.svg 2>/dev/null || true
 
 # Ensure the script is executable
 #RUN chmod +x /usr/bin/inkcut
