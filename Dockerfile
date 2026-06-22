@@ -1,9 +1,11 @@
 # ---------- Global definitions -----------
 ARG envPath="/opt/inkcut-env"
+ARG INKCUT_REPO="https://github.com/inkcut/inkcut.git"
 
 # ---------- Stage 1: Builder ----------
 FROM alpine:3 AS builder
 ARG envPath
+ARG INKCUT_REPO
 
 # Install runtime + build dependencies
 RUN apk add --no-cache \
@@ -16,12 +18,18 @@ RUN apk add --no-cache \
     qt6-qtbase-dev \
     qt6-qtwayland-dev \
     build-base \
-    cups-dev
+    cups-dev \
+    git
 
-# Create & activate virtual env, and install inkcut there-into
+# Create & activate python virtual environment (where inkcut will be installed)
 RUN python3 -m venv --system-site-packages $envPath
 ENV PATH="$envPath/bin:$PATH"
-RUN pip install --no-cache-dir inkcut
+
+# Clone the github repository & build/install there-from
+WORKDIR /src
+RUN INKCUT_REF=$(git ls-remote --tags --sort="v:refname" $INKCUT_REPO | tail -n1 | sed 's/.*\///; s/\^{}//') && \
+git clone --depth 1 --branch ${INKCUT_REF} ${INKCUT_REPO} inkcut-source
+RUN pip install --no-cache-dir ./inkcut-source
 
 # Generate the .desktop file
 RUN mkdir -p $envPath/share/applications
@@ -39,8 +47,8 @@ Terminal=false
 Type=Application
 EOL
 
-RUN mkdir $envPath/share/icons
-RUN cp $envPath/lib/python*/site-packages/inkcut/res/media/inkcut.svg $envPath/share/icons/inkcut.svg
+RUN mkdir -p $envPath/share/icons
+RUN cp $envPath/lib/python*/site-packages/inkcut/res/media/inkcut.svg $envPath/share/icons/inkcut.svg || true
 
 # ---------- Stage 2: Runtime ----------
 FROM alpine:3
